@@ -1,0 +1,98 @@
+---
+title: 'Breast cancer prediction'
+author: 'Geivi Lember'
+date: '03.10.21'
+output: 
+  html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Introduction
+
+Logistic regression is a machine learning algorithm where the dependent variable is binary categorical. It can be used to predict probabilities and odds ratios. Here, the algorithm is used to predict whether breast cancer is benign and malignant, based on the observed values of the variables.
+
+## Objectives
+
+- Understand data
+- Prepare the data for a classification analysis
+- Use a logistic regression model to predict whether breast cancer was malignant or benign 
+
+
+```{r}
+#Load the libraries
+#install.packages('mlbench') #Run if the library is not installed
+library('mlbench')
+library('caret')
+```
+
+
+```{r}
+#Inspect the data
+data('BreastCancer')
+summary(BreastCancer)
+```
+The breast cancer dataset has 699 observations (458 observations are benign and 241 observations are malignant) and 11 variables. The `Class` column is a dependent variable that shows whether the cancer is benign or malignant. All variables are factors, except the `Id` column. The `Bare.nuclei` column has 16 missing values.
+
+```{r}
+#Return rows without missing values
+data<-BreastCancer[complete.cases(BreastCancer), ]
+#Drop 'Id' column
+data<-subset(data,select=-c(Id))
+#Convert variables into numeric
+for (i in 1:9) {data[ ,i]<-as.numeric(as.character(data[,i]))}
+#Show the proportion of data for the Class variable
+table(data$Class)
+```
+
+```{r}
+#Create training and test data
+set.seed(10)
+dataind<-createDataPartition(y=data$Class,p=0.7,list=FALSE)
+train<-data[dataind, ]
+test<-data[-dataind, ]
+table(train$Class)
+```
+Here, the data is divided so that 70% of the data is used for training and 30% for testing. There are 311 benign values and 168 malignant values in the training data that need to be corrected. The `downSample` function is used to decrease the benign cases to the same number as the malignant cases.
+
+```{r}
+#Down sample the training data
+set.seed(10)
+down_train <- downSample(x=train[ ,colnames(train)!='Class'],y=train$Class)
+table(down_train$Class)
+```
+Now the training data as 168 malignant and benign cases.
+
+```{r}
+#Build a logistic regression model
+#Using the full model, including all variables
+model1<-glm(Class ~ . ,data=down_train,family='binomial')
+summary(model1)
+```
+The output provides information on how different variables affect the prediction and the importance of each variable in distinguishing between the two classes.
+
+```{r}
+#Remove irrelevant variables
+model2<-step(model1,direction='backward')
+summary(model2)
+```
+Using the backward elimination, the model with the lowest Akaike information criterion (AIC) is selected. The AIC value of the full model is 72.94 and the reduced model is 68.16 Only the variables Cl.thickness, Cell.shape, Marg.adhesion, Bare.nuclei, Bl.cromatin, Normal.nucleoli are retained.
+
+```{r}
+#Predict probabilities
+pred_prob<-predict(model2,newdata=test,type='response')
+#If the predicted probability is higher than 0.5 then it is classified as 'malignant'
+predicted_values<-ifelse(pred_prob > 0.5, 'malignant', 'benign')
+#Get the actual target values
+actual_values <- test$Class
+```
+
+```{r}
+#Show confusion matrix
+ct<-table(predicted_values,actual_values)
+ct
+#Calculate accuracy
+sum(diag(ct))/sum(ct)
+```
+The accuracy of model is 97%.
